@@ -3,7 +3,6 @@ Script para inicializar la base de datos con datos de demo
 """
 from app import create_app, db
 from app.models.user import User
-from app.models.content import Content
 from datetime import datetime
 
 def init_database():
@@ -23,9 +22,8 @@ def init_database():
             print("\nCreando usuario administrador de demo...")
             # Crear usuario admin de demo
             admin = User(
+                username='admin',
                 email='admin@upec.edu.ec',
-                name='Administrador',
-                role='admin',
                 is_active=True
             )
             admin.set_password('admin123')
@@ -34,9 +32,8 @@ def init_database():
             # Crear usuario locutor de demo
             print("Creando usuario locutor de demo...")
             locutor = User(
+                username='locutor',
                 email='locutor@upec.edu.ec',
-                name='Locutor Demo',
-                role='locutor',
                 is_active=True
             )
             locutor.set_password('locutor123')
