@@ -1,0 +1,885 @@
+openapi: 3.0.3
+info:
+  title: Portal CMS UPEC — API REST
+  description: |
+    API a medida del portal institucional UPEC (canales digitales).
+    Frontend: SPA Vue 3 (Node.js). Backend: Flask sobre Python 3.12.
+    Autenticación: JWT Bearer. Acceso administrativo restringido a @upec.edu.ec.
+  version: 1.0.0
+  contact:
+    name: Equipo CMS Canales Digitales
+servers:
+  - url: http://localhost:5000
+    description: Desarrollo local (Python 3.12 / Gunicorn o Flask)
+  - url: http://localhost/api
+    description: Detrás de Nginx (Docker Compose)
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: News
+  - name: Newspapers
+  - name: Programs
+  - name: Uploads
+  - name: YouTube
+  - name: Radio
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión (solo @upec.edu.ec)
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: superadmin@upec.edu.ec
+              password: "********"
+      responses:
+        '200':
+          description: Credenciales válidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Dominio no institucional o usuario inactivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renovar access token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Nuevo access token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token]
+                properties:
+                  access_token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Perfil del usuario autenticado
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Usuario actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidar access token (blocklist)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sesión cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: Listar usuarios (SuperAdmin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Página de usuarios
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Users]
+      summary: Crear usuario institucional (SuperAdmin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/news:
+    get:
+      tags: [News]
+      summary: Listar noticias publicadas (público)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Página de noticias (sin HTML completo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsPage'
+    post:
+      tags: [News]
+      summary: Crear noticia (Editor o SuperAdmin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewsCreate'
+      responses:
+        '201':
+          description: Noticia creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/News'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/news/{slug}:
+    get:
+      tags: [News]
+      summary: Detalle de noticia publicada por slug (público)
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Noticia con content_html
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/News'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/news/{id}:
+    put:
+      tags: [News]
+      summary: Actualizar noticia (Editor o SuperAdmin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewsCreate'
+      responses:
+        '200':
+          description: Noticia actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/News'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [News]
+      summary: Eliminar noticia (Editor o SuperAdmin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/newspapers:
+    get:
+      tags: [Newspapers]
+      summary: Listar periódicos digitales (público)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Página de periódicos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewspaperPage'
+    post:
+      tags: [Newspapers]
+      summary: Subir edición PDF (Editor o SuperAdmin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, publication_date]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Solo PDF, máximo 20 MB
+                cover:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                publication_date:
+                  type: string
+                  format: date
+                  description: YYYY-MM-DD
+      responses:
+        '201':
+          description: Periódico creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Newspaper'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/programs:
+    get:
+      tags: [Programs]
+      summary: Listar programas activos (público)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [grado, maestria, doctorado, tecnico]
+        - name: modality
+          in: query
+          schema:
+            type: string
+            enum: [presencial, virtual, hibrido]
+      responses:
+        '200':
+          description: Página de programas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramPage'
+    post:
+      tags: [Programs]
+      summary: Crear programa (GestorProgramas o SuperAdmin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramCreate'
+      responses:
+        '201':
+          description: Programa creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/programs/{id}:
+    get:
+      tags: [Programs]
+      summary: Ficha completa del programa (público)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Ficha RF-006
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Programs]
+      summary: Actualizar programa
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramCreate'
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Programs]
+      summary: Eliminar programa
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/uploads/image:
+    post:
+      tags: [Uploads]
+      summary: Subir imagen JPG/PNG
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Archivo almacenado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/youtube/latest:
+    get:
+      tags: [YouTube]
+      summary: Videos recientes del canal institucional (caché 30 min)
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 12
+            maximum: 50
+      responses:
+        '200':
+          description: Lista de videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/YoutubeVideo'
+        '500':
+          description: API Key/playlist no configurados o falla sin caché
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/radio/status:
+    get:
+      tags: [Radio]
+      summary: Metadatos Icecast (now playing)
+      description: No entrega el stream de audio. El cliente se conecta directo a Icecast.
+      security: []
+      responses:
+        '200':
+          description: Estado o fallback si Icecast no responde
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RadioStatus'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token de /api/auth/login. Refresh usa el refresh_token en el mismo esquema.
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  responses:
+    BadRequest:
+      description: Payload inválido o archivo no permitido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Token ausente, inválido o credenciales incorrectas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Rol insuficiente o dominio de correo no permitido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso inexistente
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Message:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: editor@upec.edu.ec
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      required: [access_token, refresh_token, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        is_active:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [superadmin, editor, gestor_programas]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UserCreate:
+      type: object
+      required: [email, username, password]
+      properties:
+        email:
+          type: string
+          format: email
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        roles:
+          type: array
+          items:
+            type: string
+    UserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+        pages:
+          type: integer
+        current_page:
+          type: integer
+    News:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        slug:
+          type: string
+        excerpt:
+          type: string
+          nullable: true
+        cover_image_url:
+          type: string
+          nullable: true
+        content_html:
+          type: string
+        status:
+          type: string
+          enum: [draft, published, archived]
+        author:
+          type: object
+          properties:
+            id:
+              type: integer
+            username:
+              type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              slug:
+                type: string
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+    NewsCreate:
+      type: object
+      required: [title, content_html]
+      properties:
+        title:
+          type: string
+        content_html:
+          type: string
+        excerpt:
+          type: string
+        cover_image_url:
+          type: string
+        status:
+          type: string
+          enum: [draft, published, archived]
+        category_ids:
+          type: array
+          items:
+            type: integer
+    NewsPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/News'
+        total:
+          type: integer
+        pages:
+          type: integer
+        current_page:
+          type: integer
+    Newspaper:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        pdf_url:
+          type: string
+        cover_thumbnail_url:
+          type: string
+          nullable: true
+        publication_date:
+          type: string
+          format: date
+        file_size_bytes:
+          type: integer
+    NewspaperPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Newspaper'
+        total:
+          type: integer
+        pages:
+          type: integer
+        current_page:
+          type: integer
+    ProgramCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        modality:
+          type: string
+          enum: [presencial, virtual, hibrido]
+        level:
+          type: string
+          enum: [grado, maestria, doctorado, tecnico]
+        teachers:
+          type: array
+          items:
+            type: object
+            properties:
+              full_name:
+                type: string
+              title_degree:
+                type: string
+              email:
+                type: string
+              photo_url:
+                type: string
+        students:
+          type: array
+          items:
+            type: object
+            properties:
+              full_name:
+                type: string
+              enrollment_year:
+                type: string
+        projects:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              link_url:
+                type: string
+    ProgramDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        modality:
+          type: string
+        level:
+          type: string
+        is_active:
+          type: boolean
+        teachers:
+          type: array
+          items:
+            type: object
+        students:
+          type: array
+          items:
+            type: object
+        projects:
+          type: array
+          items:
+            type: object
+    ProgramPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgramDetail'
+        total:
+          type: integer
+        pages:
+          type: integer
+        current_page:
+          type: integer
+    UploadResult:
+      type: object
+      properties:
+        url:
+          type: string
+        originalName:
+          type: string
+        sizeBytes:
+          type: integer
+    YoutubeVideo:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        publishedAt:
+          type: string
+        thumbnails:
+          type: object
+        youtubeUrl:
+          type: string
+    RadioStatus:
+      type: object
+      properties:
+        title:
+          type: string
+        artist:
+          type: string
+        listeners:
+          type: integer
+        bitrate:
+          type: integer
+        genre:
+          type: string
