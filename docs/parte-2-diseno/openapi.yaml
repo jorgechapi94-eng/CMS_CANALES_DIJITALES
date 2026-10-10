@@ -112,6 +112,63 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/users/{id}:
+    put:
+      tags: [Users]
+      summary: Activar/desactivar o cambiar roles (SuperAdmin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                is_active:
+                  type: boolean
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Users]
+      summary: Baja lógica (is_active=false), no borra la fila
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Usuario desactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: User soft deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/users:
     get:
       tags: [Users]
@@ -255,18 +312,20 @@ paths:
           $ref: '#/components/responses/NotFound'
     delete:
       tags: [News]
-      summary: Eliminar noticia (Editor o SuperAdmin)
+      summary: Archivar noticia (status=archived). No borra la fila.
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
         '200':
-          description: Eliminada
+          description: Noticia archivada
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+              example:
+                message: News archived successfully
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -328,6 +387,65 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/newspapers/{id}:
+    put:
+      tags: [Newspapers]
+      summary: Actualizar metadatos o reemplazar PDF/portada
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                publication_date:
+                  type: string
+                  format: date
+                file:
+                  type: string
+                  format: binary
+                cover:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Periódico actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Newspaper'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Newspapers]
+      summary: Eliminar registro del periódico (el archivo en disco puede quedar)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Fila eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/programs:
     get:
@@ -423,18 +541,20 @@ paths:
           $ref: '#/components/responses/NotFound'
     delete:
       tags: [Programs]
-      summary: Eliminar programa
+      summary: Archivar programa (is_active=false)
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/Id'
       responses:
         '200':
-          description: Eliminado
+          description: Programa archivado
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+              example:
+                message: Program archived successfully
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -462,6 +582,35 @@ paths:
       responses:
         '201':
           description: Archivo almacenado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/uploads/pdf:
+    post:
+      tags: [Uploads]
+      summary: Subir PDF genérico (noticias / adjuntos)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: PDF almacenado
           content:
             application/json:
               schema:

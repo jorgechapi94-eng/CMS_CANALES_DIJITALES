@@ -147,6 +147,41 @@ Respuesta **201** con `slug` generado y `author` tomado del JWT (no del body: la
 
 ---
 
+## Matriz RBAC (roles × operaciones)
+
+La IA puso “admin puede todo” en un solo rol `admin`. Se partió en tres roles del requisito:
+
+| Recurso | Público | Editor | Gestor programas | SuperAdmin |
+|---|---|---|---|---|
+| `GET` noticias/programas/periódicos/YouTube/radio | sí | sí | sí | sí |
+| `POST/PUT` `/api/news`, `/api/newspapers` | no | sí | no | sí |
+| `DELETE` `/api/news/{id}` (archiva) | no | sí | no | sí |
+| `DELETE` `/api/newspapers/{id}` (borra fila) | no | sí | no | sí |
+| `POST/PUT/DELETE` `/api/programs` | no | no | sí | sí |
+| `GET/POST/PUT/DELETE` `/api/users` | no | no | no | sí |
+| `POST` `/api/uploads/*` | no | JWT (cualquier rol staff) | JWT | JWT |
+| `POST` `/api/auth/login` | sí (filtro dominio) | — | — | — |
+
+`DELETE` de noticia, usuario y programa en el código **no es borrado físico**: noticia → `archived`, usuario → `is_active=false`, programa → `is_active=false`. El periódico sí se elimina de BD. Eso se corrigió en OpenAPI (la IA había puesto 204 No Content y borrado duro en todos).
+
+---
+
+## Catálogo de códigos HTTP usados de verdad
+
+| Código | Cuándo |
+|---|---|
+| 200 | Lectura, update, logout, archivo lógico, radio fallback |
+| 201 | Alta de noticia, usuario, programa, periódico, upload |
+| 400 | Body incompleto, PDF inválido, email duplicado, fecha malformada |
+| 401 | Sin JWT, JWT inválido, password incorrecto |
+| 403 | Dominio no UPEC, usuario inactivo, rol insuficiente |
+| 404 | Slug o id inexistente (`first_or_404` / `get_or_404`) |
+| 500 | YouTube sin API Key/playlist y sin caché previa |
+
+No se usa 204 porque Flask siempre devuelve JSON `{message}` o el recurso. No se usa 422 porque no hay capa Pydantic.
+
+---
+
 ## Cómo visualizar / entregar al docente
 
 1. Abrir [`openapi.yaml`](./openapi.yaml) en [Swagger Editor](https://editor.swagger.io) o Redoc.

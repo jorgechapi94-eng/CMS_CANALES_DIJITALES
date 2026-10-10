@@ -24,6 +24,38 @@ Evalúa normalización y justifica cada tabla.
 
 ---
 
+## Borrador ER de la IA (rechazado)
+
+Tres entidades planas, copiadas del análisis de la Parte 1. Sirve como evidencia de que **no se aceptó el primer output**:
+
+```mermaid
+erDiagram
+    USUARIO {
+        int id PK
+        string email
+        string password_hash
+        string rol
+        string estado
+    }
+    NOTICIA_PERIODICO {
+        int id PK
+        string titulo
+        text contenido_html
+        string archivo_pdf_url
+        int autor_id FK
+        datetime fecha_publicacion
+    }
+    PROGRAMA {
+        int id PK
+        string titulo
+        text descripcion
+        string lista_docentes
+        string lista_estudiantes
+        string proyectos
+    }
+    USUARIO ||--o{ NOTICIA_PERIODICO : autor
+```
+
 ## Evaluación del modelo generado por la IA (antes de corregir)
 
 La IA, alineada con el análisis de la Parte 1, propuso **tres tablas planas**. Problemas:
@@ -197,6 +229,48 @@ CREATE TABLE program_teachers (
     FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
 );
 ```
+
+---
+
+## Diccionario de datos (modelo final)
+
+### `users`
+
+| Columna | Tipo | Nulo | Descripción |
+|---|---|---|---|
+| id | INT PK | no | Identificador |
+| username | VARCHAR(80) UK | no | Nombre visible en autoría |
+| email | VARCHAR(120) UK | no | Debe ser `@upec.edu.ec` (CHECK + validación API) |
+| password_hash | VARCHAR(255) | no | Hash Werkzeug; **nunca** password en claro |
+| is_active | BOOLEAN | no | Baja lógica (DELETE de usuario no borra fila) |
+| created_at / updated_at | DATETIME | no | Auditoría |
+
+### `news`
+
+| Columna | Tipo | Nulo | Descripción |
+|---|---|---|---|
+| slug | VARCHAR(350) UK | no | URL pública; se regenera desde el título |
+| content_html | TEXT | no | HTML sanitizado en servidor |
+| status | VARCHAR(20) | no | `draft` \| `published` \| `archived` |
+| author_id | INT FK | no | Quién redactó; no se toma del body del cliente |
+
+### `newspapers` vs `news`
+
+Se **separaron** a propósito: el periódico es un **archivo PDF** con fecha de edición; la noticia es **artículo HTML**. Unificarlas (propuesta IA) dejaba la mitad de columnas siempre NULL.
+
+### Hijos de `programs`
+
+No se modeló `Persona` global (docente/estudiante compartido entre carreras) porque el requisito RF-006 es una **ficha por programa**, no un padrón institucional de RR.HH. Eso se documenta como deuda consciente: si más adelante UPEC pide “un docente en N programas”, se extrae `people` y una tabla N:M. Hoy 3FN sobre la ficha es suficiente y evita alcance extra.
+
+---
+
+## Semilla mínima (coherente con `initial_data.py`)
+
+| Tabla | Datos |
+|---|---|
+| `roles` | `superadmin`, `editor`, `gestor_programas` |
+| `users` | `admin@upec.edu.ec` (solo entorno local; password por seed, no en OpenAPI pública de producción) |
+| `categories` | Académicas, Deportes, Cultura, Investigación, Institucional |
 
 ---
 

@@ -81,6 +81,8 @@ CREATE TABLE newspapers (
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_newspapers_pub_date ON newspapers (publication_date);
+CREATE INDEX idx_users_email ON users (email);
+CREATE INDEX idx_programs_active_level ON programs (is_active, level);
 
 CREATE TABLE programs (
     id INT AUTO_INCREMENT PRIMARY KEY,

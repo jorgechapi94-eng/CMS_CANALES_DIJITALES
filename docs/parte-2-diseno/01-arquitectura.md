@@ -3,7 +3,7 @@
 **Proyecto:** Portal Web Institucional y CMS a medida (Canales Digitales UPEC)  
 **Stack fijado:** frontend con **Node.js** (Vue 3 + Vite) y backend con **Python 3.12** (Flask).  
 **Herramienta de IA:** Cursor (sesión de diseño sobre requisitos REQ/RF y el código del repositorio).  
-**Alcance:** C4 Nivel 1 (Contexto) y Nivel 2 (Contenedores), componentes, interfaces y bitácora IA vs. decisión humana.
+**Alcance:** C4 Nivel 1 (Contexto), Nivel 2 (Contenedores), Nivel 3 (componentes del API), secuencias de login/noticia/TV-radio, y bitácora IA vs. decisión humana.
 
 ---
 
@@ -204,6 +204,150 @@ Middleware de autorización: `roles_required(...)` lee claims JWT (`roles`) y re
 4. **Clave YouTube solo en servidor** (`YOUTUBE_API_KEY` en `.env`).
 5. **Interlock TV/Radio en el cliente (Pinia)**, no como endpoint REST: no hay recurso de servidor que “mutee” un altavoz local.
 6. **Python 3.12 y Node.js** como runtimes oficiales del diseño (no PHP/LAMP obligatorio, aunque el despliegue institucional pueda ir detrás de Nginx).
+
+---
+
+## C4 Nivel 3 — Componentes del contenedor API (Python 3.12)
+
+La IA dibujó un único bloque “Flask App”. Se desglosó porque el docente pide **responsabilidades e interfaces** por componente:
+
+```mermaid
+flowchart TB
+    subgraph SPA["SPA Vue 3 / Node.js"]
+        AX[Axios + JWT]
+        PIN[Pinia audio/TV]
+    end
+
+    subgraph API["Contenedor API Flask"]
+        JWTM[JWT Extended<br/>identity + claims roles]
+        RBAC[decorators.roles_required]
+        AUTH[auth.py]
+        USR[users.py]
+        NEW[news.py]
+        PAP[newspapers.py]
+        PRG[programs.py]
+        UPL[uploads.py]
+        YT[youtube.py + caché RAM 30 min]
+        RAD[radio.py]
+        VAL[validators + file_security + nh3]
+        ORM[SQLAlchemy models]
+    end
+
+    MY[(MySQL 8)]
+    FS[/uploads/]
+    YTEXT[YouTube Data API v3]
+    ICE[Icecast status-json.xsl]
+
+    AX --> AUTH
+    AX --> USR
+    AX --> NEW
+    AX --> PAP
+    AX --> PRG
+    AX --> UPL
+    AX --> YT
+    AX --> RAD
+    AUTH --> JWTM
+    USR --> RBAC
+    NEW --> RBAC
+    PAP --> RBAC
+    PRG --> RBAC
+    UPL --> JWTM
+    NEW --> VAL
+    PAP --> VAL
+    AUTH --> VAL
+    AUTH --> ORM
+    USR --> ORM
+    NEW --> ORM
+    PAP --> ORM
+    PRG --> ORM
+    ORM --> MY
+    UPL --> FS
+    PAP --> FS
+    YT --> YTEXT
+    RAD --> ICE
+    PIN -.->|no pasa por API| ICE
+```
+
+Interfaces entre componentes:
+
+| De | A | Contrato |
+|---|---|---|
+| Axios | Blueprints `/api/*` | JSON o multipart, `Authorization: Bearer` |
+| `roles_required` | Claims JWT | 403 si el rol no está en la tupla permitida |
+| Models | MySQL | SQL vía PyMySQL; sin lógica de stream |
+| `youtube.py` | Google | GET `playlistItems` + caché in-process |
+| `radio.py` | Icecast | GET JSON de metadatos; timeout 5 s |
+| Pinia | Icecast / `<video>` | Stream y mute **en el navegador** |
+
+---
+
+## Diagramas de secuencia (flujos que la IA no modeló)
+
+### Login y RBAC (RF-003 / REQ-010)
+
+```mermaid
+sequenceDiagram
+    actor E as Editor
+    participant SPA as Vue 3
+    participant API as Flask 3.12
+    participant DB as MySQL
+
+    E->>SPA: email + password
+    SPA->>API: POST /api/auth/login
+    API->>API: ¿email termina en @upec.edu.ec?
+    alt dominio inválido
+        API-->>SPA: 403
+    else dominio ok
+        API->>DB: SELECT user by email
+        API->>API: check_password + is_active
+        alt credenciales ok
+            API-->>SPA: 200 access + refresh + user.roles
+            SPA->>SPA: guarda JWT
+        else
+            API-->>SPA: 401
+        end
+    end
+```
+
+### Publicar noticia (RF-004)
+
+```mermaid
+sequenceDiagram
+    participant SPA as Panel CMS
+    participant API as news.py
+    participant VAL as nh3 sanitize
+    participant DB as MySQL
+
+    SPA->>API: POST /api/news + JWT
+    API->>API: roles_required editor|superadmin
+    API->>VAL: sanitizar content_html
+    API->>API: generar slug único
+    API->>DB: INSERT news + news_categories
+    API-->>SPA: 201 noticia
+    Note over SPA: El portal público GET /api/news solo ve status=published
+```
+
+### Interlock TV / Radio (RF-007 y RF-008) — corrección a la IA
+
+La IA inventó `POST /api/radio/mute`. Ese flujo **no existe**: el audio vive en el cliente.
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario público
+    participant Layout as Layout SPA + radio
+    participant Pinia as Store audio
+    participant TV as Módulo TV
+    participant Ice as Icecast
+
+    U->>Layout: Play radio
+    Layout->>Ice: stream HTTP (persistente)
+    U->>TV: navega /tv (SPA, sin reload)
+    Note over Layout,Ice: el hilo de audio NO se corta
+    U->>TV: Play señal 24h
+    TV->>Pinia: onPlay
+    Pinia->>Layout: muted=true o pause
+    TV->>U: audio de TV
+```
 
 ---
 
