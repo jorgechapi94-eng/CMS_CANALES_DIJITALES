@@ -51,6 +51,14 @@ def test_logout(client, auth_headers):
     headers = auth_headers()
     response = client.post('/api/auth/logout', headers=headers)
     assert response.status_code == 200
+
+ def test_login_missing_data(client):
+    response = client.post('/api/auth/login', json={
+        'email': 'superadmin@upec.edu.ec'
+        # Falta la contraseña intencionalmente
+    })
+    assert response.status_code == 400
+    assert response.json['error'] == 'Email and password are required'
     
     # Try using token again
     me_resp = client.get('/api/auth/me', headers=headers)
