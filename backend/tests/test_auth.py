@@ -54,8 +54,7 @@ def test_logout(client, auth_headers):
     # Try using token again
     me_resp = client.get('/api/auth/me', headers=headers)
     assert me_resp.status_code == 401
-
- def test_login_missing_data(client):
+def test_login_missing_data(client):
     response = client.post('/api/auth/login', json={
         'email': 'superadmin@upec.edu.ec'
         # Falta la contraseña intencionalmente
