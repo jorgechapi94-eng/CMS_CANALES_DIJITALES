@@ -51,6 +51,9 @@ def test_logout(client, auth_headers):
     headers = auth_headers()
     response = client.post('/api/auth/logout', headers=headers)
     assert response.status_code == 200
+    # Try using token again
+    me_resp = client.get('/api/auth/me', headers=headers)
+    assert me_resp.status_code == 401
 
  def test_login_missing_data(client):
     response = client.post('/api/auth/login', json={
